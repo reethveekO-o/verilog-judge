@@ -5,6 +5,7 @@ from typing import Literal
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import db
@@ -22,6 +23,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Verilog Judge", lifespan=lifespan)
+app.mount("/static", StaticFiles(directory=STATIC), name="static")   # CSS, JavaScript, fonts
 
 
 class Submission(BaseModel):
