@@ -1,0 +1,37 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: judge
+      POSTGRES_PASSWORD: judge      # fine for a laptop; change before putting this online
+      POSTGRES_DB: judge
+    volumes:
+      - pgdata:/var/lib/postgresql/data   # keeps the data when containers are rebuilt
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U judge -d judge"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  judge:
+    build: .
+    ports:
+      - "127.0.0.1:8000:8000"   # reachable only from this computer
+    environment:
+      DATABASE_URL: postgresql+psycopg://judge:judge@db:5432/judge
+    depends_on:
+      db:
+        condition: service_healthy   # wait until the database accepts connections
+    read_only: true             # container filesystem cannot be modified
+    tmpfs:
+      - /tmp:size=64m           # the only writable place, wiped on restart
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 128
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  pgdata:

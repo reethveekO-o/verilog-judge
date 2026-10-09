@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Verilog Judge</title>
+<style>
+  :root { --bg:#0f1419; --panel:#1a2029; --line:#2c3542; --text:#e6e9ee; --muted:#93a0b2;
+          --accent:#4f9cf9; --pass:#3fb950; --fail:#f85149; --warn:#d29922; }
+  * { box-sizing: border-box; }
+  [hidden] { display:none !important; }
+  body { margin:0; background:var(--bg); color:var(--text);
+         font:15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { padding:14px 20px; border-bottom:1px solid var(--line); font-weight:600; font-size:17px; }
+  main { display:grid; grid-template-columns:260px 1fr; min-height:calc(100vh - 53px); }
+  nav { border-right:1px solid var(--line); padding:12px; }
+  nav button { display:block; width:100%; text-align:left; background:none; color:var(--text);
+               border:1px solid transparent; border-radius:6px; padding:10px; cursor:pointer; font:inherit; }
+  nav button:hover { background:var(--panel); }
+  nav button.active { background:var(--panel); border-color:var(--accent); }
+  nav small { display:block; color:var(--muted); }
+  #addBtn { margin-top:10px; border:1px dashed var(--line); color:var(--muted); text-align:center; }
+  section { padding:20px; min-width:0; }
+  h2 { margin:0 0 6px; font-size:20px; }
+  h3 { margin:22px 0 8px; font-size:15px; }
+  p { margin:0 0 14px; color:var(--muted); max-width:70ch; }
+  textarea, input[type=text], select {
+    width:100%; background:var(--panel); color:var(--text); border:1px solid var(--line);
+    border-radius:6px; padding:10px 12px; font:inherit; }
+  textarea { resize:vertical; font:14px/1.45 ui-monospace, Consolas, Menlo, monospace; tab-size:4; }
+  textarea.code { height:300px; }
+  textarea.small { height:170px; }
+  .row { display:flex; align-items:center; gap:12px; margin:12px 0; flex-wrap:wrap; }
+  .primary { background:var(--accent); color:#fff; border:0; border-radius:6px; padding:9px 18px;
+             font:inherit; font-weight:600; cursor:pointer; }
+  .primary:disabled { opacity:.6; cursor:default; }
+  .secondary { background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:6px;
+               padding:8px 16px; font:inherit; cursor:pointer; }
+  label.check { display:flex; align-items:center; gap:8px; margin-top:18px; cursor:pointer; }
+  label.check input { width:16px; height:16px; }
+  #verdict, #addMsg { font-weight:700; }
+  .PASS { color:var(--pass); } .FAIL, .COMPILE_ERROR { color:var(--fail); } .TIMEOUT { color:var(--warn); }
+  pre { background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:12px;
+        margin:0; white-space:pre-wrap; word-break:break-word; min-height:60px;
+        font:13px/1.45 ui-monospace, Consolas, Menlo, monospace; }
+  .hint { color:var(--muted); font-size:13px; }
+
+  /* waveform */
+  .zoom { background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:6px;
+          width:30px; height:28px; cursor:pointer; font:inherit; }
+  #wave { background:var(--panel); border:1px solid var(--line); border-radius:6px; overflow-x:auto; }
+  #wave svg { display:block; font:12px ui-monospace, Consolas, Menlo, monospace; }
+  .w-name { fill:var(--text); }
+  .w-tick { fill:var(--muted); font-size:11px; }
+  .w-grid { stroke:var(--line); stroke-width:1; }
+  .w-bit  { fill:none; stroke:var(--pass); stroke-width:1.5; }
+  .w-bus  { fill:rgba(63,185,80,.10); stroke:var(--pass); stroke-width:1.2; }
+  .w-val  { fill:var(--text); text-anchor:middle; }
+  .w-unk  { fill:rgba(248,81,73,.25); stroke:var(--fail); stroke-width:1.2; }
+
+  /* edit / delete buttons */
+  .head { display:flex; align-items:center; gap:6px; }
+  .head h2, .head h3 { flex:1; margin-bottom:6px; }
+  .icon { display:inline-flex; align-items:center; justify-content:center; min-width:32px; height:32px;
+          padding:0 7px; background:none; color:var(--muted); border:1px solid transparent; border-radius:6px;
+          cursor:pointer; font:inherit; font-size:13px; }
+  .icon:hover { background:var(--panel); color:var(--text); border-color:var(--line); }
+  .icon.danger:hover, .icon.armed { color:var(--fail); border-color:var(--fail); }
+  .icon.armed { background:rgba(248,81,73,.12); font-weight:600; }
+
+  /* submission history */
+  .hrow { display:flex; align-items:center; border-top:1px solid var(--line); }
+  .hrow:hover { background:var(--panel); }
+  .hrow .load { display:flex; gap:14px; flex:1; text-align:left; background:none; color:var(--text);
+                border:0; padding:8px 4px; cursor:pointer; font:inherit; }
+  #history b { min-width:110px; }
+
+  /* add-problem form */
+  label { display:block; margin:14px 0 5px; font-weight:600; }
+  label .hint, h3 .hint { font-weight:400; margin-left:6px; }
+  .two { display:grid; grid-template-columns:1fr 160px; gap:12px; }
+  input[type=file] { color:var(--muted); font-size:13px; margin-top:6px; }
+
+  @media (max-width:700px) { main { grid-template-columns:1fr; } nav { border-right:0; border-bottom:1px solid var(--line); }
+                             .two { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<header>Verilog Judge</header>
+<main>
+  <nav>
+    <div id="list"></div>
+    <button id="addBtn">+ Add problem</button>
+  </nav>
+
+  <!-- ===== solve a problem ===== -->
+  <section id="solveView">
+    <div class="head">
+      <h2 id="title"></h2>
+      <button class="icon" id="editBtn" title="Edit problem" aria-label="Edit problem"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+      <button class="icon danger" id="deleteBtn" title="Delete problem" aria-label="Delete problem"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg></button>
+    </div>
+    <p id="statement"></p>
+    <textarea id="code" class="code" spellcheck="false"></textarea>
+    <div class="row">
+      <button id="submit" class="primary">Run tests</button>
+      <span id="verdict"></span>
+    </div>
+    <pre id="output">Simulator output appears here.</pre>
+
+    <div id="wavePanel" hidden>
+      <div class="row">
+        <strong>Waveform</strong>
+        <button class="zoom" id="zoomOut" title="Zoom out">&minus;</button>
+        <button class="zoom" id="zoomIn" title="Zoom in">+</button>
+        <span class="hint">Signals of your module. Time in ns, bus values in decimal, red = unknown (x/z).</span>
+      </div>
+      <div id="wave"></div>
+    </div>
+
+    <div id="historyPanel" hidden>
+      <div class="head">
+        <h3>Your submissions <span class="hint">click one to load its code</span></h3>
+        <button class="icon danger text" id="clearHistory">Clear all</button>
+      </div>
+      <div id="history"></div>
+    </div>
+  </section>
+
+  <!-- ===== add a problem ===== -->
+  <section id="addView" hidden>
+    <h2 id="formTitle">Add a problem</h2>
+    <p>The problem is saved only if your reference solution passes the testbench and the starter code does not.</p>
+
+    <div class="two">
+      <div><label for="nbTitle">Title</label><input type="text" id="nbTitle" maxlength="80"></div>
+      <div><label for="nbDifficulty">Difficulty</label>
+        <select id="nbDifficulty"><option>Easy</option><option>Medium</option><option>Hard</option></select></div>
+    </div>
+
+    <label for="nbStatement">Statement <span class="hint">what the module must do, with its port list</span></label>
+    <textarea id="nbStatement" class="small" style="font-family:inherit" maxlength="4000"></textarea>
+
+    <label for="nbStarter">Starter code <span class="hint">the empty module shown to the solver</span></label>
+    <textarea id="nbStarter" class="small" spellcheck="false"></textarea>
+    <input type="file" accept=".v,.sv,.txt" data-target="nbStarter">
+
+    <label for="nbSolution">Reference solution <span class="hint">kept hidden; proves the problem is solvable</span></label>
+    <textarea id="nbSolution" class="small" spellcheck="false"></textarea>
+    <input type="file" accept=".v,.sv,.txt" data-target="nbSolution">
+
+    <label class="check"><input type="checkbox" id="nbAuto" checked>
+      Generate the testbench automatically from the reference solution</label>
+    <p class="hint" id="nbAutoHint">The judge feeds the same inputs to your solution and to each submission and compares
+      the outputs. Works for combinational modules, and for rising-edge clocked modules with a port named
+      <code>clk</code> (plus <code>rst</code> or <code>rst_n</code> if there is a reset). Untick to write your own.</p>
+
+    <div id="nbManual" hidden>
+      <label for="nbTestbench">Testbench <span class="hint">top module <code>tb</code>, design instance named <code>dut</code>, keep the two RESULT lines</span></label>
+      <textarea id="nbTestbench" class="code" spellcheck="false"></textarea>
+      <input type="file" accept=".v,.sv,.txt" data-target="nbTestbench">
+    </div>
+
+    <div class="row">
+      <button id="saveProblem" class="primary">Check and save</button>
+      <button id="previewTb" class="secondary">Preview testbench</button>
+      <button id="cancelEdit" class="secondary" hidden>Cancel</button>
+      <span id="addMsg"></span>
+    </div>
+    <pre id="addOutput" hidden></pre>
+  </section>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const LABELS = { PASS:"Passed", FAIL:"Failed", COMPILE_ERROR:"Compile error", TIMEOUT:"Timed out" };
+let problems = [], current = null;
+const drafts = {};   // code typed so far, kept per problem while the page is open
+
+const TB_TEMPLATE = `\`timescale 1ns/1ps
+module tb;
+  // 1. declare a reg for every input and a wire for every output
+  reg  a;
+  wire y;
+  integer errors;
+
+  // 2. the instance MUST be called dut
+  my_module dut(.a(a), .y(y));
+
+  initial begin
+    errors = 0;
+
+    // 3. drive inputs, wait, compare with the expected value
+    a = 0; #1;
+    if (y !== 1'b0) begin errors = errors + 1; $display("Mismatch: a=%b -> y=%b", a, y); end
+
+    // 4. keep these two lines exactly as they are
+    if (errors == 0) $display("RESULT __TOKEN__ PASS");
+    else $display("RESULT FAIL: %0d checks wrong", errors);
+    $finish;
+  end
+endmodule
+`;
+
+function show(view) {
+  $("solveView").hidden = view !== "solve";
+  $("addView").hidden = view !== "add";
+  $("addBtn").classList.toggle("active", view === "add");
+}
+
+function renderNav() {
+  $("list").replaceChildren();
+  for (const p of problems) {
+    const b = document.createElement("button");
+    b.dataset.id = p.id;
+    b.textContent = p.title;
+    const s = document.createElement("small");
+    s.textContent = p.difficulty;
+    b.appendChild(s);
+    b.onclick = () => select(p.id);
+    $("list").appendChild(b);
+  }
+}
+
+function select(id) {
+  if (current) drafts[current.id] = $("code").value;
+  current = problems.find(p => p.id === id);
+  show("solve");
+  $("title").textContent = current.title;
+  $("statement").textContent = current.statement;
+  $("code").value = drafts[id] ?? current.starter;
+  $("verdict").textContent = "";
+  $("output").textContent = "Simulator output appears here.";
+  showWave(null);
+  for (const b of $("list").children) b.classList.toggle("active", b.dataset.id === id);
+  loadHistory();
+}
+
+async function load() {
+  problems = await (await fetch("/api/problems")).json();
+  renderNav();
+  if (problems.length) select(problems[0].id); else openForm(null);
+}
+
+$("submit").onclick = async () => {
+  $("submit").disabled = true;
+  $("verdict").className = "";
+  $("verdict").textContent = "Running...";
+  try {
+    const res = await fetch("/api/submit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ problem_id: current.id, code: $("code").value }),
+    });
+    if (!res.ok) throw new Error("Server returned " + res.status);
+    const data = await res.json();
+    $("verdict").className = data.verdict;
+    $("verdict").textContent = LABELS[data.verdict] ?? data.verdict;
+    $("output").textContent = data.output || "(no output)";
+    showWave(data.waveform);
+    loadHistory();
+  } catch (e) {
+    $("verdict").className = "FAIL";
+    $("verdict").textContent = "Error";
+    $("output").textContent = String(e);
+    showWave(null);
+  }
+  $("submit").disabled = false;
+};
+
+// Tab key inserts spaces instead of leaving the editor.
+document.addEventListener("keydown", e => {
+  const t = e.target;
+  if (e.key !== "Tab" || t.tagName !== "TEXTAREA" || t.id === "nbStatement") return;
+  e.preventDefault();
+  const s = t.selectionStart;
+  t.value = t.value.slice(0, s) + "    " + t.value.slice(t.selectionEnd);
+  t.selectionStart = t.selectionEnd = s + 4;
+});
+
+/* ---------- submission history (stored in the database) ---------- */
+async function loadHistory() {
+  const id = current.id;
+  let rows = [];
+  try { rows = await (await fetch(`/api/problems/${id}/submissions`)).json(); } catch (e) {}
+  if (!current || current.id !== id) return;          // user switched problem meanwhile
+  $("historyPanel").hidden = rows.length === 0;
+  $("history").replaceChildren();
+  for (const r of rows) {
+    const row = document.createElement("div");
+    row.className = "hrow";
+    const b = document.createElement("button");
+    b.className = "load";
+    const v = document.createElement("b");
+    v.className = r.verdict;
+    v.textContent = LABELS[r.verdict] ?? r.verdict;
+    const t = document.createElement("span");
+    t.className = "hint";
+    t.textContent = new Date(r.created_at).toLocaleString();
+    b.append(v, t);
+    b.onclick = () => { $("code").value = r.code; $("code").focus(); };
+    const x = document.createElement("button");
+    x.className = "icon danger";
+    x.title = "Delete this submission";
+    x.setAttribute("aria-label", "Delete this submission");
+    x.textContent = "\u00d7";
+    x.onclick = async () => { await fetch(`/api/submissions/${r.id}`, { method: "DELETE" }); loadHistory(); };
+    row.append(b, x);
+    $("history").appendChild(row);
+  }
+}
+
+/* ---------- delete / clear, with a second click to confirm ---------- */
+function confirmClick(btn, action) {
+  const reset = () => { clearTimeout(btn._timer); btn.classList.remove("armed"); btn.innerHTML = btn._label; btn._armed = false; };
+  if (btn._armed) { reset(); action(); return; }
+  btn._armed = true;
+  btn._label = btn.innerHTML;
+  btn.classList.add("armed");
+  btn.textContent = "Click again to confirm";
+  btn._timer = setTimeout(reset, 3500);
+}
+
+$("clearHistory").onclick = () => confirmClick($("clearHistory"), async () => {
+  await fetch(`/api/problems/${current.id}/submissions`, { method: "DELETE" });
+  loadHistory();
+});
+
+$("deleteBtn").onclick = () => confirmClick($("deleteBtn"), async () => {
+  const id = current.id;
+  const res = await fetch(`/api/problems/${id}`, { method: "DELETE" });
+  if (!res.ok) return;
+  problems = problems.filter(p => p.id !== id);
+  delete drafts[id];
+  current = null;
+  renderNav();
+  if (problems.length) select(problems[0].id); else openForm(null);
+});
+
+$("editBtn").onclick = async () => {
+  const res = await fetch(`/api/problems/${current.id}/edit`);
+  if (res.ok) openForm(await res.json());
+};
+
+/* ---------- add a problem ---------- */
+let editing = null;      // id of the problem being edited, or null when adding a new one
+
+function clearForm() {
+  for (const id of ["nbTitle", "nbStatement", "nbStarter", "nbSolution", "nbTestbench"]) $(id).value = "";
+  $("nbDifficulty").value = "Easy";
+  $("nbAuto").checked = true;
+  $("addMsg").textContent = "";
+  $("addOutput").hidden = true;
+}
+
+// full = a problem with its hidden parts (edit), or null (new problem)
+function openForm(full) {
+  if (current) drafts[current.id] = $("code").value;
+  if (full || editing !== null) clearForm();     // keep a half-typed new problem, drop anything else
+  editing = full ? full.id : null;
+  if (full) {
+    $("nbTitle").value = full.title;
+    $("nbDifficulty").value = full.difficulty;
+    $("nbStatement").value = full.statement;
+    $("nbStarter").value = full.starter;
+    $("nbSolution").value = full.solution;
+    $("nbAuto").checked = full.auto_testbench;
+    if (!full.auto_testbench) $("nbTestbench").value = full.testbench;
+  }
+  if (!$("nbTestbench").value) $("nbTestbench").value = TB_TEMPLATE;
+  $("formTitle").textContent = full ? "Edit problem" : "Add a problem";
+  $("saveProblem").textContent = full ? "Check and save changes" : "Check and save";
+  $("cancelEdit").hidden = !full;
+  for (const b of $("list").children) b.classList.toggle("active", !!full && b.dataset.id === full.id);
+  syncAuto();
+  show("add");
+  $("addBtn").classList.toggle("active", !full);
+}
+
+$("addBtn").onclick = () => openForm(null);
+$("cancelEdit").onclick = () => { const id = editing; clearForm(); editing = null; select(id); };
+
+function syncAuto() {
+  const auto = $("nbAuto").checked;
+  $("nbManual").hidden = auto;
+  $("nbAutoHint").hidden = !auto;
+  $("previewTb").hidden = !auto;
+}
+$("nbAuto").onchange = syncAuto;
+
+function addError(res, data) {
+  const msg = $("addMsg"), out = $("addOutput");
+  msg.className = "FAIL";
+  if (res.status === 422) {
+    msg.textContent = "Fill in every box (the title needs at least 3 characters).";
+  } else {
+    msg.textContent = data.detail?.message ?? "Something went wrong.";
+    if (data.detail?.output) { out.textContent = data.detail.output; out.hidden = false; }
+  }
+}
+
+$("previewTb").onclick = async () => {
+  const msg = $("addMsg"), out = $("addOutput");
+  msg.className = ""; msg.textContent = ""; out.hidden = true;
+  try {
+    const res = await fetch("/api/testbench/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ starter: $("nbStarter").value, solution: $("nbSolution").value }),
+    });
+    const data = await res.json();
+    if (res.ok) { out.textContent = data.testbench; out.hidden = false; }
+    else if (res.status === 422) { msg.className = "FAIL"; msg.textContent = "Fill in the starter code and the reference solution first."; }
+    else addError(res, data);
+  } catch (e) { msg.className = "FAIL"; msg.textContent = String(e); }
+};
+
+// "Choose file" buttons copy a .v file's text into the box above them.
+for (const input of document.querySelectorAll("input[type=file]")) {
+  input.onchange = async () => {
+    if (input.files[0]) $(input.dataset.target).value = await input.files[0].text();
+    input.value = "";
+  };
+}
+
+$("saveProblem").onclick = async () => {
+  const msg = $("addMsg"), out = $("addOutput");
+  $("saveProblem").disabled = true;
+  msg.className = ""; msg.textContent = "Checking..."; out.hidden = true;
+  try {
+    const res = await fetch(editing ? `/api/problems/${editing}` : "/api/problems", {
+      method: editing ? "PUT" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: $("nbTitle").value, difficulty: $("nbDifficulty").value,
+        statement: $("nbStatement").value, starter: $("nbStarter").value,
+        testbench: $("nbAuto").checked ? "" : $("nbTestbench").value, solution: $("nbSolution").value,
+      }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      if (editing) {
+        problems = problems.map(p => p.id === data.id ? data : p);
+        delete drafts[data.id];                  // the starter code may have changed
+        current = null;
+      } else {
+        problems.push(data);
+      }
+      renderNav();
+      clearForm();
+      editing = null;
+      select(data.id);
+    } else {
+      addError(res, data);
+    }
+  } catch (e) {
+    msg.className = "FAIL";
+    msg.textContent = String(e);
+  }
+  $("saveProblem").disabled = false;
+};
+
+/* ---------- waveform viewer ----------
+   The server sends { end_ns, signals:[{ name, width, changes:[[time, value], ...] }] }.
+   Each signal becomes one row of an SVG: a stepped line for single bits,
+   labelled boxes for buses. */
+const SVG = "http://www.w3.org/2000/svg";
+let wave = null, zoom = 1;
+
+function el(tag, attrs, text) {
+  const e = document.createElementNS(SVG, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+function showWave(w) {
+  wave = w && w.signals && w.signals.length ? w : null;
+  zoom = 1;
+  $("wavePanel").hidden = !wave;
+  drawWave();
+}
+
+function drawWave() {
+  const box = $("wave");
+  box.replaceChildren();
+  if (!wave) return;
+
+  const NAME_W = 96, ROW_H = 32, SIG_H = 18, TOP = 24, PAD = 12;
+  const end = wave.end_ns > 0 ? wave.end_ns : 1;
+  const plotW = Math.max(300, box.clientWidth - NAME_W - PAD - 2) * zoom;
+  const height = TOP + wave.signals.length * ROW_H + 6;
+  const X = t => NAME_W + (t / end) * plotW;
+  const svg = el("svg", { width: NAME_W + plotW + PAD, height });
+
+  // time axis: pick a round step (1, 2 or 5 times a power of ten) about 80px apart
+  const raw = end / (plotW / 80);
+  const pow = Math.pow(10, Math.floor(Math.log10(raw)));
+  const step = [1, 2, 5, 10].find(m => m * pow >= raw) * pow;
+  for (let t = 0; t <= end + 1e-9; t += step) {
+    svg.appendChild(el("line", { class: "w-grid", x1: X(t), x2: X(t), y1: TOP - 4, y2: height }));
+    svg.appendChild(el("text", { class: "w-tick", x: X(t) + 3, y: 12 }, String(+t.toFixed(6))));
+  }
+
+  wave.signals.forEach((sig, row) => {
+    const yTop = TOP + row * ROW_H + (ROW_H - SIG_H) / 2;
+    const yBot = yTop + SIG_H, yMid = yTop + SIG_H / 2;
+    const label = sig.width > 1 ? `${sig.name}[${sig.width - 1}:0]` : sig.name;
+    svg.appendChild(el("text", { class: "w-name", x: 8, y: yMid + 4 }, label));
+
+    const points = [];
+    sig.changes.forEach(([t0, val], k) => {
+      const t1 = k + 1 < sig.changes.length ? sig.changes[k + 1][0] : end;
+      const x0 = X(t0), x1 = Math.max(X(t1), x0);
+      const unknown = val === "x" || val === "z";
+      if (sig.width === 1 && !unknown) {
+        const y = val === "1" ? yTop : yBot;
+        points.push(`${x0},${y}`, `${x1},${y}`);      // vertical edges come for free
+      } else {
+        if (sig.width === 1) points.push(`${x0},${yMid}`, `${x1},${yMid}`);
+        svg.appendChild(el("rect", { class: unknown ? "w-unk" : "w-bus",
+                                     x: x0, y: yTop, width: x1 - x0, height: SIG_H }));
+        if (x1 - x0 > val.length * 7 + 6)
+          svg.appendChild(el("text", { class: "w-val", x: (x0 + x1) / 2, y: yMid + 4 }, val));
+      }
+    });
+    if (points.length) svg.appendChild(el("polyline", { class: "w-bit", points: points.join(" ") }));
+  });
+
+  box.appendChild(svg);
+}
+
+$("zoomIn").onclick  = () => { zoom = Math.min(zoom * 2, 64); drawWave(); };
+$("zoomOut").onclick = () => { zoom = Math.max(zoom / 2, 1);  drawWave(); };
+window.addEventListener("resize", drawWave);
+
+syncAuto();
+load();
+</script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+# Runs the test suite on GitHub's servers every time code is pushed.
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install the Verilog simulator
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends iverilog
+      - name: Install Python packages
+        run: pip install -r requirements.txt
+      - name: Run tests
+        run: python -m pytest tests -q
