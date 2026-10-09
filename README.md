@@ -1,7 +1,15 @@
 # Verilog Judge
 
+![tests](https://github.com/reethveekO-o/verilog-judge/actions/workflows/tests.yml/badge.svg)
+
 A small online judge for Verilog: pick a problem, write a module, and the server
-compiles and simulates it against a hidden testbench.
+compiles and simulates it against a hidden testbench, then shows the verdict and
+the waveform.
+
+![Ring oscillator solved, with waveform and submission history](docs/verdict.png)
+
+**Built with:** Python, FastAPI, PostgreSQL, SQLAlchemy, Docker, Icarus Verilog,
+plain JavaScript and SVG, pytest, GitHub Actions.
 
 ## Run it
 
@@ -25,7 +33,6 @@ Then open http://localhost:8000
 4. A small extra module makes the simulator record every signal of your module
    into a VCD file. `app/vcd.py` parses it and the page draws it as an SVG
    waveform (single bits as stepped lines, buses as labelled boxes).
-
 5. Problems and every submission are stored in PostgreSQL (`app/db.py`), in a
    Docker volume, so they survive restarts and rebuilds.
 
@@ -34,6 +41,8 @@ Then open http://localhost:8000
 Click **+ Add problem** and fill in the statement, starter code and a reference
 solution (type them or load `.v` files). The server stores the problem only if
 the reference solution passes the testbench and the starter code does not.
+
+![Editing a problem](docs/ring_oscillator.png)
 
 ### Editing and deleting
 
@@ -57,7 +66,17 @@ submission with the same inputs and compares their outputs:
 handle (parameterised widths, inout ports, free-running designs such as a ring
 oscillator) untick the box and write the testbench by hand.
 
+### Writing a testbench by hand
+
+A hand-written testbench needs a top module named `tb`, must instantiate the
+design as `dut` (the waveform records that instance), and must print
+`RESULT __TOKEN__ PASS` on success and `RESULT FAIL ...` otherwise.
+(`app/problems.py` only holds the three starter problems loaded into an empty
+database.)
+
 ## Safety measures
+
+Submitted code is untrusted, so:
 
 - Simulation runs as a non-root user in a container with a read-only
   filesystem, no extra Linux capabilities, and memory, CPU and process limits.
@@ -69,13 +88,18 @@ oscillator) untick the box and write the testbench by hand.
   names, so a submission cannot instantiate the reference and copy its outputs.
 - Compile and run steps both have time limits; output is capped.
 
-## Writing a testbench by hand
+## Project layout
 
-Use the form on the site. (`app/problems.py` only holds the three starter
-problems loaded into an empty database.) A hand-written testbench needs a top
-module named `tb`, must instantiate the design as `dut` (the waveform records
-`tb.dut`), and must print `RESULT __TOKEN__ PASS` on success and
-`RESULT FAIL ...` otherwise.
+```
+app/main.py            web API (FastAPI)
+app/runner.py          compiles and simulates one submission
+app/autotb.py          generates testbenches from a reference solution
+app/vcd.py             parses the simulator's waveform dump
+app/db.py              PostgreSQL tables and queries
+app/problems.py        the three starter problems
+app/static/index.html  the whole front end
+tests/                 38 tests for the judge, the generator and the API
+```
 
 ## Tests
 
